@@ -1,0 +1,8 @@
+.pixel-blast-container {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  filter: drop-shadow(0 0 60px rgba(167, 139, 250, 0.25));
+}
+
