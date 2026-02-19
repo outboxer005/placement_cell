@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/api.dart';
+import '../main.dart';
 import 'settings_page.dart';
 
 class ProfilePage extends StatefulWidget {
@@ -207,8 +208,15 @@ class _LoggedOutScreen extends StatelessWidget {
   const _LoggedOutScreen();
   @override
   Widget build(BuildContext context) {
+    // Auto-navigate to login on next frame
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const AuthGate()),
+        (route) => false,
+      );
+    });
     return const Scaffold(
-      body: Center(child: Text('Logged out. Restart app.')),
+      body: Center(child: CircularProgressIndicator()),
     );
   }
 }

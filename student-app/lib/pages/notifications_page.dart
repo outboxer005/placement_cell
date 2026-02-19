@@ -104,7 +104,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
                         }
                       }
                       // mark as read after opening
-                      final id = n['_id']?['\$oid'] ?? n['_id'];
+                      final id = n['id'];
                       if (id != null) {
                         try { await Api.markNotificationRead(id.toString()); } catch (_) {}
                         n['read'] = true;

@@ -160,7 +160,7 @@ class NotificationService {
       }
 
       // Get base URL
-      String baseUrl = sp.getString('api_base') ?? 'https://placmenet-cell-backend-2.onrender.com';
+      String baseUrl = sp.getString('api_base') ?? 'http://localhost:4000';
       final host = sp.getString('api_host');
       if (host != null && host.trim().isNotEmpty) {
         baseUrl = 'http://${host.trim()}:4000';

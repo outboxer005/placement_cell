@@ -3,7 +3,7 @@ import { requireAuth } from "../middleware/auth";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import ExcelJS from "exceljs";
 
-export function reportsRoutes(db: SupabaseClient) {
+export function exportRoutes(db: SupabaseClient) {
     const r = Router();
     r.use(requireAuth);
 

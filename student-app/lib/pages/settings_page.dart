@@ -173,7 +173,10 @@ class _SettingsPageState extends State<SettingsPage> {
                 ListTile(
                   leading: const Icon(Icons.api_outlined),
                   title: const Text('Server'),
-                  subtitle: const Text('https://placmenet-cell-backend-2.onrender.com'),
+                  subtitle: FutureBuilder<String>(
+                    future: Api.currentBase(),
+                    builder: (context, snap) => Text(snap.data ?? 'http://localhost:4000'),
+                  ),
                 ),
               ],
             ),

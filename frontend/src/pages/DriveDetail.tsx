@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
-import { api } from "@/lib/api";
+import { api, apiFetch } from "@/lib/api";
 import { ArrowLeft, Users, CheckCircle2, XCircle, Clock, Download, Target } from "lucide-react";
 import { FieldSelectorDialog } from "@/components/FieldSelectorDialog";
 import { exportToExcel, transformers, type FieldConfig } from "@/lib/exportUtils";
@@ -123,21 +123,17 @@ export default function DriveDetail() {
         if (!selectedApp) return;
         try {
             const currentRound = selectedApp.current_round || 1;
-            const totalRounds = drive?.total_rounds || 1;
 
-            const res = await fetch(`/api/applications/${selectedApp.id}/round-status`, {
+            const res = await apiFetch(`/applications/${selectedApp.id}/round-status`, {
                 method: "PUT",
-                headers: { "Content-Type": "application/json" },
-                credentials: "include",
                 body: JSON.stringify({
                     round: currentRound,
                     status: selectedRoundStatus,
                 }),
             });
 
-            if (!res.ok) throw new Error("Failed to update round status");
+            if (!res.ok) throw new Error((res.data as any)?.error || "Failed to update round status");
 
-            const data = await res.json();
             toast.success(`Round ${currentRound} ${selectedRoundStatus}`);
             setRoundDialogOpen(false);
             setSelectedApp(null);

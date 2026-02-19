@@ -375,6 +375,7 @@ class AuthGate extends StatefulWidget {
 class _AuthGateState extends State<AuthGate> {
   bool _loading = true;
   bool _authed = false;
+  bool _openProfile = false;
 
   @override
   void initState() {
@@ -386,7 +387,8 @@ class _AuthGateState extends State<AuthGate> {
     try {
       final me = await Api.me();
       if (me?['ok'] == true) {
-        setState(() { _authed = true; _loading = false; });
+        final profileComplete = await _isProfileComplete();
+        setState(() { _authed = true; _loading = false; _openProfile = !profileComplete; });
         return;
       }
     } catch (_) {
@@ -398,17 +400,34 @@ class _AuthGateState extends State<AuthGate> {
       final lastPwd = sp.getString('last_password');
       if (lastId != null && lastId.isNotEmpty && lastPwd != null && lastPwd.isNotEmpty) {
         await Api.studentLogin(lastId, lastPwd);
-        setState(() { _authed = true; _loading = false; });
+        final profileComplete = await _isProfileComplete();
+        setState(() { _authed = true; _loading = false; _openProfile = !profileComplete; });
         return;
       }
     } catch (_) {}
-    setState(() { _loading = false; _authed = false; });
+    setState(() { _loading = false; _authed = false; _openProfile = false; });
+  }
+
+  Future<bool> _isProfileComplete() async {
+    try {
+      final profile = await Api.myProfile();
+      final firstName = profile['first_name']?.toString().trim() ?? '';
+      final email = profile['email']?.toString().trim() ?? '';
+      final phone = profile['phone']?.toString().trim() ?? '';
+      return firstName.isNotEmpty && email.isNotEmpty && phone.isNotEmpty;
+    } catch (_) {
+      return true; // Don't redirect if profile fetch fails
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     if (_loading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
-    return _authed ? const MainShell() : LoginPage(onLoggedIn: () { setState(() { _authed = true; }); });
+    if (_authed) return MainShell(initialIndex: _openProfile ? 3 : 0);
+    return LoginPage(onLoggedIn: () async {
+      final profileComplete = await _isProfileComplete();
+      setState(() { _authed = true; _openProfile = !profileComplete; });
+    });
   }
 }
 

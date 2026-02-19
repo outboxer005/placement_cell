@@ -137,7 +137,33 @@ export function applicationsRoutes(db: SupabaseClient) {
     }
   });
 
+  // Student stats — must come before /:id routes
+  r.get("/me/stats", async (req, res) => {
+    try {
+      const user = (req as any).user as { role: string; sub?: string };
+      if (user?.role !== "student" || !user?.sub) {
+        return res.status(403).json({ error: "Student access only" });
+      }
+      const studentId = Number(user.sub);
+      const { data, error } = await db
+        .from("applications")
+        .select("status")
+        .eq("student_id", studentId);
+      if (error) return res.status(500).json({ error: error.message });
+      const rows = data ?? [];
+      return res.json({
+        total: rows.length,
+        pending: rows.filter((r: any) => r.status === "pending").length,
+        accepted: rows.filter((r: any) => r.status === "accepted").length,
+        rejected: rows.filter((r: any) => r.status === "rejected").length,
+      });
+    } catch (e: any) {
+      return res.status(500).json({ error: e.message || "Failed to fetch stats" });
+    }
+  });
+
   r.put("/:id/status", async (req, res) => {
+
     try {
       const user = (req as any).user as { role: string; sub?: string };
       if (user?.role !== "main-admin" && user?.role !== "branch-admin") {
@@ -223,17 +249,13 @@ export function applicationsRoutes(db: SupabaseClient) {
         return res.status(400).json({ error: "Invalid round status. Use 'accepted' or 'rejected'" });
       }
 
-      // Fetch application and drive
-      const [{ data: appRows, error: fetchError }, { data: driveRows, error: driveError }] = await Promise.all([
-        db.from("applications").select("*").eq("id", id).maybeSingle(),
-        db.from("drives").select("total_rounds, round_names, title").maybeSingle(),
-      ]);
+      // Fetch application first, then fetch the drive for that application
+      const { data: appRows, error: fetchError } = await db.from("applications").select("*").eq("id", id).maybeSingle();
 
       if (fetchError) return res.status(500).json({ error: fetchError.message });
       if (!appRows) return res.status(404).json({ error: "Application not found" });
-      if (driveError) return res.status(500).json({ error: driveError.message });
 
-      const drive = await db.from(" drives").select("total_rounds, round_names, title").eq("id", appRows.drive_id).maybeSingle();
+      const drive = await db.from("drives").select("total_rounds, round_names, title").eq("id", appRows.drive_id).maybeSingle();
       const totalRounds = drive.data?.total_rounds || 1;
       const roundNames = drive.data?.round_names || [];
 

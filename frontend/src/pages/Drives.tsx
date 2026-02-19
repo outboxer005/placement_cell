@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Plus, CheckCircle2, Clock, CalendarRange, Building2, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -56,6 +57,7 @@ export default function Drives() {
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState(DEFAULT_FORM);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const navigate = useNavigate();
 
   const driveFields: FieldConfig[] = [
     { key: "title", label: "Drive Title", defaultSelected: true },
@@ -355,7 +357,7 @@ export default function Drives() {
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => window.location.href = `/drives/${drive.id}`}
+                      onClick={() => navigate(`/drives/${drive.id}`)}
                     >
                       View Details
                     </Button>
@@ -370,7 +372,8 @@ export default function Drives() {
             </Card>
           ))}
         </div>
-      )}
+      )
+      }
 
       <FieldSelectorDialog
         open={exportDialogOpen}
@@ -380,7 +383,7 @@ export default function Drives() {
         title="Export Drives to Excel"
         description="Select which drive fields to include in the export"
       />
-    </div>
+    </div >
   );
 }
 

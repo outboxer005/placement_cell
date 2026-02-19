@@ -10,9 +10,10 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
-import { Eye, Send, Loader2, Download } from "lucide-react";
+import { Eye, Send, Loader2, Download, Upload } from "lucide-react";
 import { FieldSelectorDialog } from "@/components/FieldSelectorDialog";
 import { exportToExcel, transformers, type FieldConfig } from "@/lib/exportUtils";
+import { BulkUploadDialog } from "@/components/BulkUploadDialog";
 
 export default function Students() {
   const [query, setQuery] = useState("");
@@ -26,6 +27,7 @@ export default function Students() {
   const [savingDetail, setSavingDetail] = useState(false);
   const [activeStudentId, setActiveStudentId] = useState<string | null>(null);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [bulkUploadDialogOpen, setBulkUploadDialogOpen] = useState(false);
 
   const studentFields: FieldConfig[] = [
     { key: "regd_id", label: "Registration ID", defaultSelected: true },
@@ -134,12 +136,16 @@ export default function Students() {
               <CardTitle className="text-3xl font-bold tracking-tight">Students</CardTitle>
               <p className="text-muted-foreground mt-2">Manage student profiles, CGPA imports and requests</p>
             </div>
-            <div className="flex gap-2 items-center">
+            <div className="flex gap-2 items-center flex-wrap">
               {isMain && (<Input className="w-40" placeholder="Branch (e.g., CSE)" value={branch} onChange={(e) => setBranch(e.target.value)} />)}
               <Input className="max-w-sm" placeholder="Search by name, regd id, email" value={query} onChange={(e) => setQuery(e.target.value)} />
+              <Button onClick={() => setBulkUploadDialogOpen(true)}>
+                <Upload className="h-4 w-4 mr-2" />
+                Bulk Upload
+              </Button>
               <Button variant="outline" onClick={() => setExportDialogOpen(true)} disabled={filtered.length === 0}>
                 <Download className="h-4 w-4 mr-2" />
-                Export to Excel
+                Export
               </Button>
               <input type="file" accept=".csv,text/csv" onChange={(e) => onCsvSelected(e.target.files?.[0] ?? null)} />
             </div>
@@ -224,6 +230,12 @@ export default function Students() {
         title="Export Students to Excel"
         description="Select which student fields to include in the export"
       />
+
+      <BulkUploadDialog
+        open={bulkUploadDialogOpen}
+        onOpenChange={setBulkUploadDialogOpen}
+        onComplete={load}
+      />
     </div>
   );
 }
@@ -248,8 +260,12 @@ const StudentDetailPanel = ({ detail, saving, onSave, onRequestData }: DetailPan
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
+    const nameParts = form.name.trim().split(/\s+/);
+    const first_name = nameParts[0] || "";
+    const last_name = nameParts.length > 1 ? nameParts.slice(1).join(" ") : "";
     const payload = {
-      name: form.name,
+      first_name,
+      last_name,
       email: form.email,
       altEmail: form.altEmail,
       phone: form.phone,

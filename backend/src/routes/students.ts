@@ -2,6 +2,7 @@ import { Router } from "express";
 import { requireAuth } from "../middleware/auth";
 import { z } from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import multer from "multer";
 import {
   addressSchema,
   educationSchema,
@@ -11,6 +12,9 @@ import {
   upsertAddress,
   upsertEducation,
 } from "../utils/student-data";
+import { parseCSV, parseExcel } from "../utils/bulk-upload";
+import { generateStudentPassword } from "../utils/password-generator";
+import { hashPassword } from "../utils/password";
 
 const studentSelfSchema = z.object({
   first_name: z.string().min(1).max(60).optional(),
@@ -157,6 +161,181 @@ export function studentsRoutes(db: SupabaseClient) {
       res.status(500).json({ ok: false, error: e.message || "Import failed" });
     }
   });
+
+  // Bulk upload students from CSV or Excel file
+  const upload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 10 * 1024 * 1024 }, // 10MB max
+    fileFilter: (req, file, cb) => {
+      const allowedMimes = [
+        'text/csv',
+        'application/vnd.ms-excel',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      ];
+      if (allowedMimes.includes(file.mimetype) || file.originalname.endsWith('.csv') || file.originalname.endsWith('.xlsx')) {
+        cb(null, true);
+      } else {
+        cb(new Error('Only CSV and Excel files are allowed'));
+      }
+    }
+  });
+
+  r.post("/bulk-upload", upload.single('file'), async (req, res) => {
+    try {
+      const user = (req as any).user as { role: string; branch?: string | null };
+      if (user?.role !== "main-admin" && user?.role !== "branch-admin") {
+        return res.status(403).json({ error: "Admin access required for bulk upload" });
+      }
+
+      const file = req.file;
+      if (!file) {
+        return res.status(400).json({ error: "No file uploaded" });
+      }
+
+      // Parse file based on type
+      let parseResult;
+      if (file.mimetype === 'text/csv' || file.originalname.endsWith('.csv')) {
+        parseResult = await parseCSV(file.buffer);
+      } else {
+        parseResult = await parseExcel(file.buffer);
+      }
+
+      if (!parseResult.success && parseResult.errors.length > 0) {
+        return res.status(400).json({
+          error: "File parsing failed",
+          details: parseResult.errors
+        });
+      }
+
+      const results = {
+        total: parseResult.data.length,
+        created: 0,
+        updated: 0,
+        failed: 0,
+        errors: [] as Array<{ row: number; username: string; error: string }>
+      };
+
+      // Process each student credential
+      for (let i = 0; i < parseResult.data.length; i++) {
+        const { username, password } = parseResult.data[i];
+        const rowNumber = i + 2; // Account for header row
+
+        try {
+          if (!username || !password) {
+            results.failed++;
+            results.errors.push({ row: rowNumber, username, error: 'Both username and password are required' });
+            continue;
+          }
+
+          // Check if student exists in students table
+          const { data: student, error: studentError } = await db
+            .from("students")
+            .select("id")
+            .eq("regd_id", username)
+            .maybeSingle();
+
+          if (studentError && studentError.code !== "PGRST116") {
+            results.failed++;
+            results.errors.push({ row: rowNumber, username, error: studentError.message });
+            continue;
+          }
+
+          let studentId: number;
+
+          if (!student) {
+            // Create new student record with minimal data
+            const { data: inserted, error: insertError } = await db
+              .from("students")
+              .insert({
+                regd_id: username,
+                updated_at: new Date().toISOString()
+              })
+              .select("id")
+              .single();
+
+            if (insertError) {
+              results.failed++;
+              results.errors.push({ row: rowNumber, username, error: insertError.message });
+              continue;
+            }
+
+            studentId = inserted.id;
+          } else {
+            studentId = student.id;
+          }
+
+          // Hash password and set in student_auth table
+          try {
+            const passwordHash = await hashPassword(password);
+
+            // Check if auth record exists
+            const { data: existingAuth } = await db
+              .from("student_auth")
+              .select("student_id")
+              .eq("student_id", studentId)
+              .maybeSingle();
+
+            if (existingAuth) {
+              // Update existing password
+              const { error: updateError } = await db
+                .from("student_auth")
+                .update({ password_hash: passwordHash })
+                .eq("student_id", studentId);
+
+              if (updateError) {
+                results.failed++;
+                results.errors.push({ row: rowNumber, username, error: `Failed to update password: ${updateError.message}` });
+                continue;
+              }
+              results.updated++;
+            } else {
+              // Insert new auth record
+              const { error: insertError } = await db
+                .from("student_auth")
+                .insert({
+                  student_id: studentId,
+                  password_hash: passwordHash,
+                });
+
+              if (insertError) {
+                results.failed++;
+                results.errors.push({ row: rowNumber, username, error: `Failed to create auth: ${insertError.message}` });
+                continue;
+              }
+              results.created++;
+            }
+
+          } catch (pwdError: any) {
+            results.failed++;
+            results.errors.push({ row: rowNumber, username, error: `Password error: ${pwdError.message}` });
+          }
+
+        } catch (error: any) {
+          results.failed++;
+          results.errors.push({
+            row: rowNumber,
+            username,
+            error: error.message || "Unknown error"
+          });
+        }
+      }
+
+      res.json({
+        ok: true,
+        summary: {
+          total: results.total,
+          created: results.created,
+          updated: results.updated,
+          failed: results.failed
+        },
+        errors: results.errors.slice(0, 50) // Limit error details to first 50
+      });
+
+    } catch (e: any) {
+      res.status(500).json({ error: e.message || "Bulk upload failed" });
+    }
+  });
+
 
   r.post("/", async (req, res) => {
     const user = (req as any).user as { role: string; branch?: string | null };
